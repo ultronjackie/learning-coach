@@ -1,0 +1,14 @@
+# Personal configuration and learning records stay local.
+/references/storage.local.md
+/Self-Study/
+/courses/
+/work/
+/validation/
+
+# Local secrets and generated files.
+.env
+.env.*
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
