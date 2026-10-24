@@ -1,4 +1,4 @@
 interface:
   display_name: "分阶段学习教练"
-  short_description: "以教材为主线诊断基础、规划两小时课程、教学验收并跨对话续学"
-  default_prompt: "用 $learning-coach 帮我系统学习一个领域：先了解目标和基础，再选教材、估算总学时并规划每次约两小时的分阶段课程。"
+  short_description: "以教材阅读为主线，个性化规划、补充讲解、检验掌握并跨对话续学"
+  default_prompt: "用 $learning-coach 帮我系统学习一个领域：先诊断基础，再选教材、规划总学时与约两小时课次；每次指定阅读范围，按我的表现补充讲解并评估掌握。"
