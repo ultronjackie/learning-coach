@@ -1,0 +1,31 @@
+{
+  "fixture_label": "SYNTHETIC",
+  "disclaimer": "SYNTHETIC. These locations are fixture strings. A status of verified means only that the fixture claims the string was checked. It is not a real textbook citation.",
+  "sources": [
+    {
+      "id": "section-checked-no-page",
+      "status": "verified",
+      "location": "SYNTHETIC-TEXT section 1 definition A",
+      "page": null,
+      "checked": "opened the synthetic section heading"
+    },
+    {
+      "id": "page-checked",
+      "status": "verified",
+      "location": "SYNTHETIC-TEXT section 1",
+      "page": "SYNTHETIC-p-12",
+      "checked": "read that synthetic page string"
+    },
+    {
+      "id": "unverified-has-page-string",
+      "status": "unverified",
+      "location": "SYNTHETIC-TEXT section 9",
+      "page": "SYNTHETIC-p-404",
+      "checked": null
+    },
+    {
+      "id": "unknown-source",
+      "status": "unknown"
+    }
+  ]
+}
