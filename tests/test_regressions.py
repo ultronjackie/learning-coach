@@ -102,9 +102,107 @@ class UnseenTransferAndDelay(unittest.TestCase):
         self.assertEqual(after_hint["ladder"], "独立完成")
         self.assertFalse(after_hint["delayed_retention"])
         self.assertIn("prior_was_not_independent_unseen_transfer", after_hint["reasons"])
+        self.assertEqual(fixture["day_one"]["skill"], fixture["next_local_day"]["skill"])
+        self.assertTrue(next_day["delayed_retention"])
+
+    def test_retention_rejects_weak_cross_skill_and_missing_skill_priors(self):
+        yesterday = "2026-11-15T10:00:00+08:00"
+        today = "2026-11-16T10:00:00+08:00"
+
+        def current_on(skill, prior):
+            record = {
+                "skill": skill,
+                "source_kind": "observed",
+                "timestamp": today,
+                "assistance": "none",
+                "performance": "successful",
+                "seen_before": False,
+                "transfer": True,
+                "task_id": "synthetic-loops-today",
+                "prior_independent": prior,
+            }
+            if skill is None:
+                del record["skill"]
+            return classify_evidence(record)
+
+        adversarial = {
+            "ladder": "独立完成",
+            "unseen_transfer": True,
+            "assistance": "hint",
+            "legacy_projection": True,
+            "timestamp": yesterday,
+            "task_id": "old",
+        }
+        self.assertFalse(qualifies_as_prior_independent(adversarial, skill="synthetic-loops"))
+        adversarial_result = current_on("synthetic-loops", adversarial)
+        self.assertEqual(adversarial_result["ladder"], "独立完成")
+        self.assertFalse(adversarial_result["delayed_retention"])
+
+        quantifiers = {
+            "skill": "synthetic-quantifiers",
+            "source_kind": "observed",
+            "timestamp": yesterday,
+            "assistance": "none",
+            "performance": "successful",
+            "seen_before": False,
+            "transfer": True,
+            "task_id": "synthetic-quantifiers-transfer",
+        }
+        self.assertTrue(qualifies_as_prior_independent(quantifiers, skill="synthetic-quantifiers"))
+        self.assertFalse(qualifies_as_prior_independent(quantifiers, skill="synthetic-loops"))
+        cross = current_on("synthetic-loops", quantifiers)
+        self.assertEqual(cross["ladder"], "独立完成")
+        self.assertFalse(cross["delayed_retention"])
+        self.assertIn("delayed_retention_requires_same_skill", cross["reasons"])
+
+        missing_current = current_on(None, quantifiers)
+        self.assertEqual(missing_current["ladder"], "独立完成")
+        self.assertFalse(missing_current["delayed_retention"])
+        self.assertIn("delayed_retention_requires_skill", missing_current["reasons"])
+
+        prior_without_skill = dict(quantifiers)
+        del prior_without_skill["skill"]
+        missing_prior = current_on("synthetic-loops", prior_without_skill)
+        self.assertFalse(missing_prior["delayed_retention"])
+        self.assertIn("delayed_retention_requires_skill", missing_prior["reasons"])
+        self.assertNotIn("synthetic-quantifiers", json.dumps(missing_prior))
+
+        stub = {"skill": "synthetic-loops", "ladder": "独立完成", "unseen_transfer": True}
+        self.assertFalse(qualifies_as_prior_independent(stub, skill="synthetic-loops"))
+        stub_result = current_on("synthetic-loops", stub)
+        self.assertEqual(stub_result["ladder"], "独立完成")
+        self.assertFalse(stub_result["delayed_retention"])
+
+        legacy_shaped = {
+            "skill": "synthetic-loops",
+            "source_kind": "observed",
+            "assistance": "none",
+            "unseen_transfer": True,
+            "ladder": "独立完成",
+            "legacy_projection": True,
+            "timestamp": yesterday,
+            "task_id": "legacy-cell",
+        }
+        self.assertFalse(qualifies_as_prior_independent(legacy_shaped, skill="synthetic-loops"))
+        self.assertFalse(current_on("synthetic-loops", legacy_shaped)["delayed_retention"])
+
+        qualified_compact = {
+            "skill": "synthetic-loops",
+            "source_kind": "observed",
+            "assistance": "none",
+            "unseen_transfer": True,
+            "ladder": "独立完成",
+            "timestamp": yesterday,
+            "task_id": "synthetic-loops-yesterday",
+        }
+        self.assertTrue(qualifies_as_prior_independent(qualified_compact, skill="synthetic-loops"))
+        kept = current_on("synthetic-loops", qualified_compact)
+        self.assertEqual(kept["ladder"], "延迟保持")
+        self.assertTrue(kept["delayed_retention"])
 
     def test_local_midnight_counts_as_the_next_local_day(self):
         prior = {
+            "skill": "synthetic-midnight",
             "source_kind": "observed",
             "timestamp": "2026-11-15T23:30:00+08:00",
             "assistance": "none",
@@ -179,6 +277,24 @@ class PolicyAndSources(unittest.TestCase):
         self.assertFalse(graded["coach_emits_graded_solution"])
         self.assertEqual(graded["policy_statement_used"], resolved["statement"])
 
+    def test_unverified_policy_denies_assignment_specific_help(self):
+        policies = (
+            None,
+            {"status": "unknown"},
+            {"status": "conflicting"},
+            {"status": "verified", "statement_present": False, "statement": "SYNTHETIC"},
+            resolve_policy({"status": "verified", "statement_present": False}),
+        )
+        for policy in policies:
+            hint = policy_gate(policy, "hint_without_solution")
+            analogy = policy_gate(policy, "analogous_example", distinct_from_graded_item=True)
+            self.assertFalse(hint["allow"], policy)
+            self.assertFalse(analogy["allow"], policy)
+            self.assertTrue(policy_gate(policy, "general_concept")["allow"])
+            self.assertTrue(policy_gate(policy, "policy_clarification")["allow"])
+            self.assertFalse(policy_gate(policy, "graded_answer")["allow"])
+            self.assertFalse(policy_gate(policy, "graded_answer")["coach_emits_graded_solution"])
+
     def test_verified_and_unverified_locations(self):
         fixture = load_json("sources.json")
         by_id = {item["id"]: citation_decision(item) for item in fixture["sources"]}
@@ -224,12 +340,13 @@ class TutoringProcedure(unittest.TestCase):
             "transfer_assigned": False,
         }
         expected = [
-            (0, "orient_concept", "hint"),
-            (1, "strategic_hint", "hint"),
-            (2, "partial_structure", "hint"),
-            (3, "request_teachback", "none"),
+            (0, "request_policy", "none"),
+            (1, "explain_general_concept", "none"),
+            (2, "stop_and_wait", "none"),
+            (3, "stop_and_wait", "none"),
             (4, "stop_and_wait", "none"),
         ]
+        blocked = ("orient_concept", "strategic_hint", "partial_structure", "analogous_example")
         for layer, action, assistance in expected:
             session = dict(base)
             session["learner_request"] = "hint"
@@ -237,9 +354,21 @@ class TutoringProcedure(unittest.TestCase):
             result = next_tutor_action(session)
             self.assertEqual(result["action"], action)
             self.assertEqual(result["assistance"], assistance)
+            self.assertNotIn(result["action"], blocked)
             self.assertFalse(result["counts_as_independent_mastery"])
             self.assertFalse(result["emits_graded_solution"])
             self.assertNotIn("solution", result)
+
+        bare = next_tutor_action({
+            "mode": "formal_course",
+            "graded": True,
+            "attempt_submitted": True,
+            "learner_request": "hint",
+            "hints_already": 1,
+        })
+        self.assertEqual(bare["policy_status"], "unknown")
+        self.assertEqual(bare["action"], "explain_general_concept")
+        self.assertNotIn(bare["action"], blocked)
 
         no_attempt = dict(base)
         no_attempt["attempt_submitted"] = False
@@ -262,7 +391,7 @@ class TutoringProcedure(unittest.TestCase):
         self.assertTrue(transfer["not_the_graded_submission"])
 
     def test_hint_recorded_from_the_procedure_blocks_mastery(self):
-        policy = load_json("unknown_policy.json")["unknown_policy"]
+        policy = load_json("unknown_policy.json")["verified_synthetic_statement"]
         step = next_tutor_action({
             "mode": "formal_course",
             "graded": True,
@@ -271,6 +400,7 @@ class TutoringProcedure(unittest.TestCase):
             "attempt_submitted": True,
             "hints_already": 1,
         })
+        self.assertEqual(step["action"], "strategic_hint")
         self.assertEqual(step["assistance"], "hint")
         record = classify_evidence({
             "source_kind": "observed",
@@ -302,6 +432,45 @@ class TutoringProcedure(unittest.TestCase):
         })
         self.assertEqual(graded["action"], "refuse_graded_completion")
         self.assertFalse(graded["emits_graded_solution"])
+        ungraded_hint = next_tutor_action({
+            "mode": "self_study",
+            "graded": False,
+            "learner_request": "hint",
+            "attempt_submitted": True,
+            "hints_already": 1,
+        })
+        self.assertEqual(ungraded_hint["action"], "strategic_hint")
+
+    def test_self_study_graded_unknown_policy_blocks_assignment_hints(self):
+        blocked = ("orient_concept", "strategic_hint", "partial_structure", "analogous_example", "fuller_explanation")
+        policies = (
+            None,
+            {"status": "unknown"},
+            {"status": "conflicting"},
+            {"status": "verified", "statement_present": False, "statement": "SYNTHETIC"},
+        )
+        for policy in policies:
+            for layer in range(6):
+                result = next_tutor_action({
+                    "mode": "self_study",
+                    "graded": True,
+                    "policy": policy,
+                    "learner_request": "hint",
+                    "attempt_submitted": True,
+                    "hints_already": layer,
+                })
+                self.assertNotIn(result["action"], blocked)
+                self.assertFalse(result["emits_graded_solution"])
+                self.assertFalse(result["invented_policy"])
+            concept = next_tutor_action({
+                "mode": "self_study",
+                "graded": True,
+                "policy": policy,
+                "learner_request": "concept",
+                "attempt_submitted": True,
+            })
+            self.assertEqual(concept["action"], "explain_general_concept")
+            self.assertFalse(concept["emits_graded_solution"])
 
     def test_verified_analogies_are_allowed_and_graded_completion_is_not(self):
         policy = load_json("unknown_policy.json")["verified_synthetic_statement"]
@@ -365,6 +534,13 @@ class TutoringProcedure(unittest.TestCase):
                                 self.assertNotEqual(result["action"], "fuller_explanation")
                             if graded and request in ("answer", "submission"):
                                 self.assertEqual(result["action"], "refuse_graded_completion")
+                            if graded and resolve_policy(policy)["status"] != "verified":
+                                self.assertNotIn(result["action"], (
+                                    "orient_concept",
+                                    "strategic_hint",
+                                    "partial_structure",
+                                    "analogous_example",
+                                ))
 
 
 class SignalsAndReplan(unittest.TestCase):
@@ -582,6 +758,85 @@ class LegacySelfStudy(unittest.TestCase):
         self.assertEqual(migrated["signals"]["joj"]["status"], "unknown")
         self.assertEqual(migrated["signals"]["git"]["status"], "unknown")
         self.assertFalse(migrated["integrations_required"])
+
+    def test_verified_policy_round_trip_keeps_allowances_and_sources(self):
+        statement = (
+            "SYNTHETIC POLICY TEXT. Hints without a solution are not allowed. "
+            "This fixture text says graded answers are permitted. It is not a real course policy."
+        )
+        original = {
+            "schema": "learning-coach.state/v1",
+            "mode": "formal_course",
+            "authority": {"role": "local", "store": "filesystem"},
+            "open_tasks": ["keep-me"],
+            "policy": {
+                "status": "verified",
+                "statement_present": True,
+                "statement": "  " + statement + "  ",
+                "allowances": {
+                    "hints_without_solution": False,
+                    "graded_answers": True,
+                },
+            },
+            "sources": [
+                {
+                    "id": "checked",
+                    "status": "verified",
+                    "location": "SYNTHETIC-TEXT section 1",
+                    "page": None,
+                    "checked": "opened the synthetic section",
+                },
+                {
+                    "id": "unverified-has-page-string",
+                    "status": "unverified",
+                    "location": "SYNTHETIC-TEXT section 9",
+                    "page": "SYNTHETIC-p-404",
+                    "checked": None,
+                },
+            ],
+        }
+        first = accept_state(original)
+        second = accept_state(first)
+        self.assertEqual(first["policy"], second["policy"])
+        self.assertEqual(second["policy"]["status"], "verified")
+        self.assertTrue(second["policy"]["statement_present"])
+        self.assertEqual(second["policy"]["statement"], statement)
+        self.assertIs(second["policy"]["allowances"]["hints_without_solution"], False)
+        self.assertIs(second["policy"]["allowances"]["graded_answers"], True)
+        self.assertEqual(second["open_tasks"], ["keep-me"])
+        reloaded_hint = policy_gate(second["policy"], "hint_without_solution")
+        self.assertFalse(reloaded_hint["allow"])
+        self.assertEqual(reloaded_hint["policy_status"], "verified")
+        reloaded_graded = policy_gate(second["policy"], "graded_answer")
+        self.assertFalse(reloaded_graded["allow"])
+        self.assertFalse(reloaded_graded["coach_emits_graded_solution"])
+        self.assertTrue(reloaded_graded["course_policy_allows_graded_answers"])
+        self.assertEqual(reloaded_graded["policy_statement_used"], statement)
+        stored = {item["id"]: item for item in second["sources"]}
+        self.assertEqual(stored["unverified-has-page-string"]["status"], "unverified")
+        self.assertEqual(stored["unverified-has-page-string"]["page"], "SYNTHETIC-p-404")
+        self.assertIsNone(citation_decision(stored["unverified-has-page-string"])["page_used"])
+        self.assertEqual(citation_decision(stored["checked"])["location_used"], "SYNTHETIC-TEXT section 1")
+        self.assertIsNone(citation_decision(stored["checked"])["page_used"])
+
+        flag_only = accept_state({
+            "schema": "learning-coach.state/v1",
+            "mode": "formal_course",
+            "policy": {
+                "status": "verified",
+                "statement_present": False,
+                "statement": "SYNTHETIC text that was not marked present",
+                "allowances": {"hints_without_solution": False, "graded_answers": True},
+            },
+        })
+        flag_again = accept_state(flag_only)
+        self.assertEqual(flag_only["policy"], flag_again["policy"])
+        self.assertEqual(flag_again["policy"]["status"], "unknown")
+        self.assertFalse(flag_again["policy"]["statement_present"])
+        self.assertIsNone(flag_again["policy"]["statement"])
+        self.assertNotEqual(flag_again["policy"]["reason"], "statement_recorded")
+        self.assertFalse(policy_gate(flag_again["policy"], "hint_without_solution")["allow"])
+        self.assertIsNone(policy_gate(flag_again["policy"], "graded_answer")["course_policy_allows_graded_answers"])
 
     def test_ladder_is_unchanged(self):
         self.assertEqual(LADDER, ("未测", "已接触", "辅助完成", "独立完成", "延迟保持"))

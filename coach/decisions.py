@@ -91,7 +91,8 @@ def classify_evidence(record):
     delayed, delay_reason = _delayed(
         record.get("timestamp"),
         record.get("task_id"),
-        _as_prior(record.get("prior_independent")),
+        record.get("prior_independent"),
+        record.get("skill"),
     )
     result["independent_mastery"] = True
     result["reasons"].append("independent_unseen_transfer")
@@ -106,37 +107,63 @@ def classify_evidence(record):
     return result
 
 
-def _as_prior(prior):
-    """Use a prior only when that record itself meets the independent bar."""
-    if not isinstance(prior, dict):
-        return None
-    if "source_kind" in prior or "performance" in prior:
-        stripped = {key: value for key, value in prior.items() if key != "prior_independent"}
-        classified = classify_evidence(stripped)
-        qualifies = (
-            classified["independent_mastery"]
-            and prior.get("assistance") == "none"
-            and prior.get("source_kind") == "observed"
-            and prior.get("seen_before") is False
-            and prior.get("transfer") is True
+def _nonempty_skill(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _prior_provenance_ok(entry):
+    """Same bar for a full evidence record and a compact projection.
+
+    A ladder label, an unseen flag, or a legacy cell is not enough. Hinted
+    help, a legacy projection, a missing observation, or a missing skill fails.
+    """
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("legacy_projection") is True:
+        return False
+    if entry.get("assistance") != "none":
+        return False
+    if entry.get("source_kind") != "observed":
+        return False
+    if not _nonempty_skill(entry.get("skill")):
+        return False
+    if _aware(entry.get("timestamp")) is None or not entry.get("task_id"):
+        return False
+    if any(key in entry for key in ("performance", "seen_before", "transfer")):
+        return (
+            entry.get("performance") == "successful"
+            and entry.get("seen_before") is False
+            and entry.get("transfer") is True
         )
-        return {
-            "ladder": "独立完成" if qualifies else classified["ladder"],
-            "unseen_transfer": qualifies,
-            "timestamp": prior.get("timestamp"),
-            "task_id": prior.get("task_id"),
-        }
-    if prior.get("ladder") == "延迟保持" and prior.get("unseen_transfer") is True:
-        copied = dict(prior)
-        copied["ladder"] = "独立完成"
-        return copied
-    return prior
+    return (
+        entry.get("unseen_transfer") is True
+        and entry.get("ladder") in ("独立完成", "延迟保持")
+    )
 
 
-def _delayed(timestamp, task_id, prior):
+def qualifies_as_prior_independent(entry, skill=None):
+    """True only when entry itself is an observed unassisted unseen success.
+
+    Passing skill requires that same nonempty skill on the entry. A missing
+    skill is not filled in, and a legacy projection never qualifies.
+    """
+    if not _prior_provenance_ok(entry):
+        return False
+    if skill is None:
+        return True
+    if not _nonempty_skill(skill):
+        return False
+    return entry.get("skill").strip() == skill.strip()
+
+
+def _delayed(timestamp, task_id, prior, skill):
     if not isinstance(prior, dict):
         return False, "delayed_retention_requires_prior_independent"
-    if prior.get("ladder") != "独立完成" or prior.get("unseen_transfer") is not True:
+    if not _nonempty_skill(skill) or not _nonempty_skill(prior.get("skill")):
+        return False, "delayed_retention_requires_skill"
+    if prior.get("skill").strip() != skill.strip():
+        return False, "delayed_retention_requires_same_skill"
+    if not qualifies_as_prior_independent(prior, skill=skill):
         return False, "prior_was_not_independent_unseen_transfer"
     prior_task = prior.get("task_id")
     if not prior_task or not task_id or prior_task == task_id:
@@ -150,62 +177,56 @@ def _delayed(timestamp, task_id, prior):
     return True, None
 
 
-def qualifies_as_prior_independent(entry):
-    """A legacy ladder cell is not a v1 prior independent record."""
-    if not isinstance(entry, dict):
-        return False
-    if entry.get("legacy_projection") is True:
-        return False
-    return (
-        entry.get("ladder") == "独立完成"
-        and entry.get("unseen_transfer") is True
-        and entry.get("source_kind") == "observed"
-        and entry.get("assistance") == "none"
-        and _aware(entry.get("timestamp")) is not None
-        and bool(entry.get("task_id"))
-    )
-
-
 def resolve_policy(policy):
-    """Return the policy actually on record. Never fill in a statement."""
+    """Return the policy actually on record. Never fill in a statement.
+
+    The result is safe to store and resolve again: a verified statement keeps
+    statement_present and the recorded True/False allowances. A verified flag
+    without statement text stays unknown and does not become verified later.
+    """
     empty = {key: None for key in ALLOWANCE_KEYS}
+
+    def pack(status, statement, present, allowances, reason):
+        return {
+            "status": status,
+            "statement": statement,
+            "statement_present": present,
+            "allowances": dict(allowances),
+            "reason": reason,
+            "invented_policy": False,
+        }
+
     if not isinstance(policy, dict):
-        return _policy_result("unknown", None, empty, "policy_absent")
+        return pack("unknown", None, False, empty, "policy_absent")
     status = policy.get("status")
-    if status == "conflicting":
-        return _policy_result("conflicting", None, empty, "policy_reports_conflict")
-    if status != "verified":
-        return _policy_result("unknown", None, empty, "policy_unknown")
     statement = policy.get("statement")
-    if policy.get("statement_present") is not True or not isinstance(statement, str) or not statement.strip():
-        return _policy_result("unknown", None, empty, "verified_flag_without_recorded_statement")
+    text = statement.strip() if isinstance(statement, str) and statement.strip() else None
+    present = policy.get("statement_present") is True and text is not None
     raw = policy.get("allowances") if isinstance(policy.get("allowances"), dict) else {}
     allowances = {}
     for key in ALLOWANCE_KEYS:
-        if key not in raw:
-            allowances[key] = None
+        if key in raw and isinstance(raw[key], bool):
+            allowances[key] = raw[key]
         else:
-            allowances[key] = raw[key] is True
-    return _policy_result("verified", statement.strip(), allowances, "statement_recorded")
-
-
-def _policy_result(status, statement, allowances, reason):
-    return {
-        "status": status,
-        "statement": statement,
-        "allowances": allowances,
-        "reason": reason,
-        "invented_policy": False,
-    }
+            allowances[key] = None
+    if status == "conflicting":
+        return pack("conflicting", None, False, empty, "policy_reports_conflict")
+    if status == "verified" and present:
+        return pack("verified", text, True, allowances, "statement_recorded")
+    if status == "verified" or policy.get("reason") == "verified_flag_without_recorded_statement":
+        return pack("unknown", None, False, empty, "verified_flag_without_recorded_statement")
+    if policy.get("reason") == "policy_absent":
+        return pack("unknown", None, False, empty, "policy_absent")
+    return pack("unknown", None, False, empty, "policy_unknown")
 
 
 def policy_gate(policy, request_kind, distinct_from_graded_item=False):
     """Decide whether a kind of help is available.
 
-    Unknown or conflicting policy: general concepts and policy clarification
-    stay available; graded answers and submission drafts do not. A missing
-    allowance is not rewritten into a course prohibition. Graded work is never
-    emitted, including when a verified allowance says answers are permitted.
+    Unknown, conflicting, or unverifiable policy: general concepts and policy
+    clarification stay available. Assignment hints and analogous examples do
+    not. A missing allowance is not a permission. Graded work is never emitted,
+    including when a verified allowance says answers are permitted.
     """
     resolved = resolve_policy(policy)
     base = {
@@ -231,15 +252,14 @@ def policy_gate(policy, request_kind, distinct_from_graded_item=False):
             "course_policy_forbids_graded_answers": (recorded is False) if resolved["status"] == "verified" else None,
         }
     if request_kind == "hint_without_solution":
-        if resolved["allowances"].get("hints_without_solution") is False:
-            return {**base, "allow": False, "reason": "verified_policy_disallows_hints"}
+        if resolved["status"] != "verified" or resolved["allowances"].get("hints_without_solution") is not True:
+            return {**base, "allow": False, "reason": "assignment_hint_requires_verified_allowance"}
         return {**base, "allow": True, "reason": "hint_without_solution"}
     if request_kind == "analogous_example":
         if distinct_from_graded_item is not True:
             return {**base, "allow": False, "reason": "analogous_example_must_be_a_different_item"}
-        recorded = resolved["allowances"].get("analogous_examples")
-        if resolved["status"] == "verified" and recorded is not True:
-            return {**base, "allow": False, "reason": "analogous_example_not_recorded_as_allowed"}
+        if resolved["status"] != "verified" or resolved["allowances"].get("analogous_examples") is not True:
+            return {**base, "allow": False, "reason": "analogous_example_requires_verified_allowance"}
         return {
             **base,
             "allow": True,
@@ -284,10 +304,11 @@ def citation_decision(source):
 def next_tutor_action(session):
     """Return the next tutoring step. Never marks mastery and never emits a solution.
 
-    Formal graded work with an unknown policy stops at concept orientation,
-    one strategic hint, structure without the key inference, teachback, and an
-    unseen non-submission transfer. Self-study still gives a full explanation
-    when the learner asks and the item is not graded; that records answer_shown.
+    Graded work needs a verified policy before any assignment-specific hint.
+    Until then the only help is a general concept or a request for the policy
+    text, including when the session is labeled self_study. Self-study still
+    gives a full explanation when the learner asks and the item is not graded;
+    that records answer_shown.
     """
     if not isinstance(session, dict):
         session = {}
@@ -324,8 +345,7 @@ def next_tutor_action(session):
         gate = policy_gate(session.get("policy"), "general_concept")
         if not gate["allow"]:
             return _action("request_policy", "none", resolved, reason=gate["reason"])
-        assistance = "hint" if graded else "none"
-        return _action("explain_general_concept", assistance, resolved, graded_item_excluded=not graded)
+        return _action("explain_general_concept", "none", resolved, graded_item_excluded=True)
     if mode == "self_study" and not graded and request == "answer":
         return _action("fuller_explanation", "answer_shown", resolved)
     if not attempt and request in ("hint", "explain", "continue", "answer"):
@@ -341,7 +361,7 @@ def next_tutor_action(session):
         )
     if teachback_done and transfer_assigned:
         return _action("stop_and_wait", "none", resolved, reason="wait_for_unseen_transfer_attempt")
-    sequence = _hint_sequence(mode, graded, resolved)
+    sequence = _hint_sequence(graded, session.get("policy"))
     if layer < len(sequence):
         action = sequence[layer]
         assistance = _assistance_for(action, graded)
@@ -356,30 +376,36 @@ def next_tutor_action(session):
     return _action("stop_and_wait", "none", resolved, reason=reason)
 
 
-def _hint_sequence(mode, graded, resolved):
-    if graded and resolved["allowances"].get("hints_without_solution") is False:
+def _hint_sequence(graded, policy):
+    if not graded:
+        return [
+            "orient_concept",
+            "strategic_hint",
+            "partial_structure",
+            "analogous_example",
+            "request_teachback",
+        ]
+    resolved = resolve_policy(policy)
+    hints_allowed = policy_gate(policy, "hint_without_solution")["allow"]
+    analogy_allowed = policy_gate(policy, "analogous_example", distinct_from_graded_item=True)["allow"]
+    concepts_allowed = policy_gate(policy, "general_concept")["allow"]
+    if not hints_allowed:
+        if not concepts_allowed:
+            return ["request_policy"]
+        if resolved["status"] != "verified":
+            return ["request_policy", "explain_general_concept"]
         return ["explain_general_concept", "request_teachback"]
-    if mode == "formal_course" and graded:
-        sequence = ["orient_concept", "strategic_hint", "partial_structure"]
-        if resolved["status"] == "verified" and resolved["allowances"].get("analogous_examples") is True:
-            sequence.append("analogous_example")
-        sequence.append("request_teachback")
-        return sequence
-    return [
-        "orient_concept",
-        "strategic_hint",
-        "partial_structure",
-        "analogous_example",
-        "request_teachback",
-    ]
+    sequence = ["orient_concept", "strategic_hint", "partial_structure"]
+    if analogy_allowed:
+        sequence.append("analogous_example")
+    sequence.append("request_teachback")
+    return sequence
 
 
 def _assistance_for(action, graded):
     if action == "analogous_example":
         return "worked_example"
     if action in ("orient_concept", "strategic_hint", "partial_structure"):
-        return "hint"
-    if action == "explain_general_concept" and graded:
         return "hint"
     return "none"
 
@@ -851,6 +877,25 @@ def migrate_v0_to_v1(state, original_text):
     }
 
 
+def _portable_sources(sources):
+    """Copy source records without promoting an unverified location."""
+    if not isinstance(sources, list):
+        return []
+    kept = []
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        status = source.get("status")
+        if status not in ("verified", "unverified", "unknown"):
+            status = "unknown"
+        item = {"status": status}
+        for key in ("id", "location", "page", "checked"):
+            if key in source:
+                item[key] = source.get(key)
+        kept.append(item)
+    return kept
+
+
 def accept_state(document):
     """Accept v0 markdown or a v1 mapping. Keep exactly one authority."""
     if isinstance(document, str):
@@ -881,6 +926,8 @@ def accept_state(document):
             "invented_policy": False,
             "integrations_required": False,
         }
+        if "sources" in document:
+            migrated["sources"] = _portable_sources(document.get("sources"))
         if "signals" in document:
             migrated["signals"] = normalize_signals(document.get("signals"))
         authority = document.get("authority")
