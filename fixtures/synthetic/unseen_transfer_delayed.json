@@ -1,0 +1,114 @@
+{
+  "fixture_label": "SYNTHETIC",
+  "disclaimer": "SYNTHETIC. Not evidence of a learning outcome. Timestamps are fixture data.",
+  "day_one": {
+    "skill": "synthetic-continuity",
+    "source_kind": "observed",
+    "timestamp": "2026-11-15T10:00:00+08:00",
+    "assistance": "none",
+    "performance": "successful",
+    "seen_before": false,
+    "transfer": true,
+    "task_id": "synthetic-a"
+  },
+  "same_local_day": {
+    "skill": "synthetic-continuity",
+    "source_kind": "observed",
+    "timestamp": "2026-11-15T21:00:00+08:00",
+    "assistance": "none",
+    "performance": "successful",
+    "seen_before": false,
+    "transfer": true,
+    "task_id": "synthetic-b",
+    "prior_independent": {
+      "skill": "synthetic-continuity",
+      "source_kind": "observed",
+      "timestamp": "2026-11-15T10:00:00+08:00",
+      "assistance": "none",
+      "performance": "successful",
+      "seen_before": false,
+      "transfer": true,
+      "task_id": "synthetic-a"
+    }
+  },
+  "next_local_day": {
+    "skill": "synthetic-continuity",
+    "source_kind": "observed",
+    "timestamp": "2026-11-16T09:00:00+08:00",
+    "assistance": "none",
+    "performance": "successful",
+    "seen_before": false,
+    "transfer": true,
+    "task_id": "synthetic-c",
+    "prior_independent": {
+      "skill": "synthetic-continuity",
+      "source_kind": "observed",
+      "timestamp": "2026-11-15T10:00:00+08:00",
+      "assistance": "none",
+      "performance": "successful",
+      "seen_before": false,
+      "transfer": true,
+      "task_id": "synthetic-a"
+    }
+  },
+  "same_task_next_day": {
+    "skill": "synthetic-continuity",
+    "source_kind": "observed",
+    "timestamp": "2026-11-16T09:30:00+08:00",
+    "assistance": "none",
+    "performance": "successful",
+    "seen_before": false,
+    "transfer": true,
+    "task_id": "synthetic-a",
+    "prior_independent": {
+      "skill": "synthetic-continuity",
+      "source_kind": "observed",
+      "timestamp": "2026-11-15T10:00:00+08:00",
+      "assistance": "none",
+      "performance": "successful",
+      "seen_before": false,
+      "transfer": true,
+      "task_id": "synthetic-a"
+    }
+  },
+  "next_day_hinted": {
+    "skill": "synthetic-continuity",
+    "source_kind": "observed",
+    "timestamp": "2026-11-16T11:00:00+08:00",
+    "assistance": "hint",
+    "performance": "successful",
+    "seen_before": false,
+    "transfer": true,
+    "task_id": "synthetic-d",
+    "prior_independent": {
+      "skill": "synthetic-continuity",
+      "source_kind": "observed",
+      "timestamp": "2026-11-15T10:00:00+08:00",
+      "assistance": "none",
+      "performance": "successful",
+      "seen_before": false,
+      "transfer": true,
+      "task_id": "synthetic-a"
+    }
+  },
+  "next_day_after_hinted_prior": {
+    "skill": "synthetic-continuity",
+    "source_kind": "observed",
+    "timestamp": "2026-11-16T12:00:00+08:00",
+    "assistance": "none",
+    "performance": "successful",
+    "seen_before": false,
+    "transfer": true,
+    "task_id": "synthetic-e",
+    "prior_independent": {
+      "skill": "synthetic-continuity",
+      "source_kind": "observed",
+      "timestamp": "2026-11-15T18:00:00+08:00",
+      "assistance": "hint",
+      "performance": "successful",
+      "seen_before": false,
+      "transfer": true,
+      "task_id": "synthetic-hinted"
+    }
+  }
+}

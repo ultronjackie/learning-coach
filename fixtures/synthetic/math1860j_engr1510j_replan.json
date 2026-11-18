@@ -1,0 +1,74 @@
+{
+  "fixture_label": "SYNTHETIC",
+  "disclaimer": "SYNTHETIC scenario using the labels MATH1860J and ENGR1510J. Not evidence of actual course policy, deadlines, submissions, or learning outcomes.",
+  "now": "2026-11-16T09:00:00+08:00",
+  "blocks": [
+    {
+      "id": "evening",
+      "start": "2026-11-16T19:00:00+08:00",
+      "end": "2026-11-16T20:30:00+08:00"
+    }
+  ],
+  "missed_session": {
+    "course_id": "SYNTHETIC-MATH1860J",
+    "when": "2026-11-15T19:00:00+08:00",
+    "task_ids": ["m-read-3", "m-practice-3", "m-omitted"]
+  },
+  "courses": [
+    {
+      "id": "SYNTHETIC-MATH1860J",
+      "deadline_status": "known",
+      "deadline": "2026-11-18T23:59:00+08:00",
+      "policy_status": "unknown",
+      "signals": {
+        "canvas": "missing"
+      },
+      "tasks": [
+        {
+          "id": "m-read-3",
+          "minutes": 40,
+          "kind": "reading",
+          "required": true
+        },
+        {
+          "id": "m-practice-3",
+          "minutes": 50,
+          "kind": "practice",
+          "required": true,
+          "blocked_by_gap": "epsilon-delta",
+          "gap_ladder": "辅助完成",
+          "gap_minutes": 20
+        },
+        {
+          "id": "m-submit",
+          "minutes": 20,
+          "kind": "submission",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "SYNTHETIC-ENGR1510J",
+      "deadline_status": "conflicting",
+      "deadline_reports": ["2026-11-17", "2026-11-20"],
+      "policy_status": "unknown",
+      "signals": {
+        "git": "submitted"
+      },
+      "tasks": [
+        {
+          "id": "e-lab",
+          "minutes": 60,
+          "kind": "submission",
+          "required": true
+        },
+        {
+          "id": "e-concept",
+          "minutes": 30,
+          "kind": "gap_study",
+          "required": false
+        }
+      ]
+    }
+  ]
+}

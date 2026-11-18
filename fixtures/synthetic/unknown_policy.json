@@ -1,0 +1,31 @@
+{
+  "fixture_label": "SYNTHETIC",
+  "disclaimer": "SYNTHETIC scenario labeled MATH1860J. Not evidence of an actual MATH1860J policy, syllabus, or assignment.",
+  "course_id": "SYNTHETIC-MATH1860J",
+  "unknown_policy": {
+    "status": "unknown"
+  },
+  "conflicting_policy": {
+    "status": "conflicting",
+    "reports": [
+      "SYNTHETIC report A: assistance allowed",
+      "SYNTHETIC report B: assistance disallowed"
+    ]
+  },
+  "verified_flag_without_statement": {
+    "status": "verified",
+    "statement_present": false
+  },
+  "verified_synthetic_statement": {
+    "status": "verified",
+    "statement_present": true,
+    "statement": "SYNTHETIC POLICY TEXT. This sentence was placed in the fixture. It is not a real course policy. It records that concept explanation is allowed and that the coach still must not write the graded submission.",
+    "allowances": {
+      "general_concepts": true,
+      "policy_clarification": true,
+      "hints_without_solution": true,
+      "analogous_examples": true,
+      "graded_answers": true
+    }
+  }
+}

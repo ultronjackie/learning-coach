@@ -1,0 +1,34 @@
+{
+  "fixture_label": "SYNTHETIC",
+  "disclaimer": "SYNTHETIC. Not a learner record and not evidence of a learning outcome.",
+  "hinted_unseen_success": {
+    "skill": "synthetic-quantifiers",
+    "source_kind": "observed",
+    "timestamp": "2026-11-16T10:00:00+08:00",
+    "assistance": "hint",
+    "performance": "successful",
+    "seen_before": false,
+    "transfer": true,
+    "task_id": "synthetic-transfer-1"
+  },
+  "self_report_of_mastery": {
+    "skill": "synthetic-quantifiers",
+    "source_kind": "self_report",
+    "timestamp": "2026-11-16T10:05:00+08:00",
+    "assistance": "none",
+    "performance": "successful",
+    "seen_before": false,
+    "transfer": true,
+    "task_id": "synthetic-transfer-2"
+  },
+  "same_item_unassisted": {
+    "skill": "synthetic-quantifiers",
+    "source_kind": "observed",
+    "timestamp": "2026-11-16T10:10:00+08:00",
+    "assistance": "none",
+    "performance": "successful",
+    "seen_before": true,
+    "transfer": false,
+    "task_id": "synthetic-worked-example"
+  }
+}
